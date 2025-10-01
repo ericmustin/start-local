@@ -226,7 +226,7 @@ The tests run `start-local.sh` and check if Elasticsearch and Kibana are working
 > [!NOTE]
 > For URL pipeline testing, a local web server is used. This requires [PHP](https://www.php.net/).
 
-### [Experimental] Podman Support
+## [Experimental] Podman Support
 
 This Fork has been modified to auto detect podman or docker tools, and work with both.
 
