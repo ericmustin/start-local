@@ -228,20 +228,26 @@ The tests run `start-local.sh` and check if Elasticsearch and Kibana are working
 
 ## [Experimental] Podman Support
 
-This Fork has been modified to auto detect podman or docker tools, and work with both.
+This Fork has been modified to auto detect podman or docker, and support both.
 
 Example:
 
-1. Clone this repository
-2. Instal Podman or Docker
+1. Clone this repository `git clone ...`
+2. `cd /start-local`
+2. Install Podman or Docker
+   - https://docs.docker.com/compose/install/
+   - https://docs.docker.com/desktop/
+   - https://podman-desktop.io/
+   - https://podman.io/
 3. Invoke startup script 
 
-- Simple
+- Simple Invocation Example
+
 ```
 ./start-local.sh
 ```
 
-- Detail
+- Detailed Invocation Examples
 
 ```
 ./start-local.sh -v 8.17.0        # auto-detects Podman, else Docker
