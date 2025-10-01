@@ -257,7 +257,7 @@ generate_error_log() {
   fi
   { 
     echo "Start-local version: ${version}"
-    echo "Docker engine: $(docker --version)"
+    echo "Docker engine: $(podman --version)"
     echo "Docker compose: ${docker_version}"
     echo "Elastic Stack version: ${es_version}"
     if [ "$esonly" = "true" ]; then
@@ -270,7 +270,7 @@ generate_error_log() {
   } >> "$error_file" 
   for service in $docker_services; do
     echo "-- Logs of service ${service}:" >> "$error_file"
-    docker logs "${service}" >> "$error_file" 2> /dev/null
+    podman logs "${service}" >> "$error_file" 2> /dev/null
   done
   echo "An error log has been generated in ${error_log} file."
   echo "If you need assistance, open an issue at https://github.com/elastic/start-local/issues"
@@ -354,7 +354,7 @@ create_api_key() {
 # parameter: the name of the container
 check_container_running() {
   container_name=$1
-  containers="$(docker ps --format '{{.Names}}')"
+  containers="$(podman ps --format '{{.Names}}')"
   if echo "$containers" | grep -q "^${container_name}$"; then
     echo "The docker container '$container_name' is already running!"
     echo "You can have only one running at time."
@@ -391,10 +391,14 @@ check_requirements() {
   fi
   need_wait_for_kibana=true
   # Check for "docker compose" or "docker-compose"
+  use_podman=false
   set +e
-  if ! docker compose >/dev/null 2>&1; then
-    if ! available "docker-compose"; then
-      if ! available "docker"; then
+  if ! podman compose >/dev/null 2>&1; then
+    if ! available "podman compose"; then
+      if available "podman"; then
+        use_podman=true
+        echo "Info: using podman instead of docker"
+      elif ! available "podman"; then
         echo "Error: docker command is required"
         echo "You can install it from https://docs.docker.com/engine/install/."
         exit 1
@@ -403,28 +407,39 @@ check_requirements() {
       echo "You can install it from https://docs.docker.com/compose/install/"
       exit 1
     fi
-    docker="docker-compose up -d"
-    docker_stop="docker-compose stop"
-    docker_clean="docker-compose rm -fsv"
-    docker_remove_volumes="docker-compose down -v"
-    docker_version=$(docker-compose --version | head -n 1 | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+')
-    if [ "$(compare_versions "$docker_version" "$min_docker_compose")" = "lt" ]; then
-      echo "Unfortunately we don't support docker compose ${docker_version}. The minimum required version is $min_docker_compose."
-      echo "You can migrate you docker compose from https://docs.docker.com/compose/migrate/"
-      cleanup
-      exit 1
-    fi 
+
+    if [ "$use_podman" = true ]; then
+      docker="podman compose up -d"
+      docker_stop="podman compose stop"
+      docker_clean="podman compose rm -fsv"
+      docker_remove_volumes="podman compose down -v"
+      docker_version=$(podman compose --version | head -n 1 | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+')
+    else  
+      docker="podman compose up -d"
+      docker_stop="podman compose stop"
+      docker_clean="podman compose rm -fsv"
+      docker_remove_volumes="podman compose down -v"
+      docker_version=$(podman compose --version | head -n 1 | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+')
+      if [ "$(compare_versions "$docker_version" "$min_docker_compose")" = "lt" ]; then
+        echo "Unfortunately we don't support docker compose ${docker_version}. The minimum required version is $min_docker_compose."
+        echo "You can migrate you docker compose from https://docs.docker.com/compose/migrate/"
+        cleanup
+        exit 1
+      fi 
+    fi
   else
-    docker_stop="docker compose stop"
-    docker_clean="docker compose rm -fsv"
-    docker_remove_volumes="docker compose down -v"
-    docker_version=$(docker compose version | head -n 1 | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+')
+    docker_stop="podman compose stop"
+    docker_clean="podman compose rm -fsv"
+    docker_remove_volumes="podman compose down -v"
+    docker_version=$(podman compose version | head -n 1 | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+')
     # --wait option has been introduced in 2.1.1+
+    # TODO: podman lacks this so removed for now
+    # https://github.com/containers/podman-compose/issues/710
     if [ "$(compare_versions "$docker_version" "2.1.0")" = "gt" ]; then
-      docker="docker compose up --wait"
+      docker="podman compose up -d"
       need_wait_for_kibana=false
     else
-      docker="docker compose up -d"
+      docker="podman compose up -d"
     fi
   fi
   set -e
@@ -698,7 +713,7 @@ EOM
 
   cat >> uninstall.sh <<- EOM
   if ask_confirmation; then
-    if docker rmi "docker.elastic.co/elasticsearch/elasticsearch:${es_version}" >/dev/null 2>&1; then
+    if podman rmi "docker.elastic.co/elasticsearch/elasticsearch:${es_version}" >/dev/null 2>&1; then
       echo "Image docker.elastic.co/elasticsearch/elasticsearch:${es_version} removed successfully"
     else
       echo "Failed to remove image docker.elastic.co/elasticsearch/elasticsearch:${es_version}. It might be in use."
@@ -707,7 +722,7 @@ EOM
 
   if  [ "$esonly" = "false" ]; then
     cat >> uninstall.sh <<- EOM
-    if docker rmi docker.elastic.co/kibana/kibana:${es_version} >/dev/null 2>&1; then
+    if podman rmi docker.elastic.co/kibana/kibana:${es_version} >/dev/null 2>&1; then
       echo "Image docker.elastic.co/kibana/kibana:${es_version} removed successfully"
     else
       echo "Failed to remove image docker.elastic.co/kibana/kibana:${es_version}. It might be in use."
@@ -717,7 +732,7 @@ EOM
 
   if  [ "$edot" = "true" ]; then
     cat >> uninstall.sh <<- EOM
-    if docker rmi docker.elastic.co/elastic-agent/elastic-edot-collector:${es_version} >/dev/null 2>&1; then
+    if podman rmi docker.elastic.co/elastic-agent/elastic-edot-collector:${es_version} >/dev/null 2>&1; then
       echo "Image docker.elastic.co/elastic-agent/elastic-edot-collector:${es_version} removed successfully"
     else
       echo "Failed to remove image docker.elastic.co/elastic-agent/elastic-edot-collector:${es_version}. It might be in use."
